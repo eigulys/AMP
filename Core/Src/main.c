@@ -37,7 +37,7 @@
 
 #define ADC_buf_len 1000
 //#define ADC_buf_len 293
-#define ADC_REFERENCE_VOLTAGE 3300
+#define ADC_REF 3300
 //#define MAX_VALUES_BUFFER_SIZE 3
 
 
@@ -63,7 +63,7 @@ DMA_HandleTypeDef hdma_usart2_tx;
 /* USER CODE BEGIN PV */
 
 uint16_t adc_buf[ADC_buf_len];
-float rms_value = 0.0f;
+float rms_value;
 uint32_t sum_squares = 0;
 float rms_current = 0.0f;
 //uint32_t max_value = 0;
@@ -255,7 +255,7 @@ int main(void)
           max_value = adc_buf[i];
       }
   }
-  	  rms_value = max_value;
+  	  rms_value = max_value/4096;
 //		avg_value = 0;
 //  for (int i = 0; i < ADC_buf_len; i++)
 //  {
@@ -597,33 +597,42 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 
- /*
-void HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hadc)
-{
-	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+
+//void skaiciavimai()
+//{
+//	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
 
     // Calculate average value
-    avg_value = 0;
-    for (int i = 0; i < ADC_buf_len; i++)
-    {
-        avg_value += adc_buf[i];
-    }
-    avg_value = avg_value/ADC_buf_len;
+//		    max_value = 0;
+//	  for (int i = 0; i < ADC_buf_len; i++) {
+//	      if (adc_buf[i] > max_value) {
+//	          max_value = adc_buf[i];
+//	      }
+//	  }
+//	  	  avg_value = max_value;
+//	  	  rms_value = max_value/4095;
 
-    // Calculate RMS value
-    float sum = 0;
-    for (int i = 0; i < ADC_buf_len; i++)
-    {
-        sum += pow((adc_buf[i] - avg_value), 2);
-    }
-    rms_value = (sqrt((sum / ADC_buf_len)/4095)) * ADC_REFERENCE_VOLTAGE;
+//    avg_value = 0;
+//    for (int i = 0; i < ADC_buf_len; i++)
+//    {
+//        avg_value += adc_buf[i];
+//    }
+//    avg_value = avg_value/ADC_buf_len;
+//
+//    // Calculate RMS value
+//    float sum = 0;
+//    for (int i = 0; i < ADC_buf_len; i++)
+//    {
+//        sum += pow((adc_buf[i] - avg_value), 2);
+//    }
+//    rms_value = (sqrt((sum / ADC_buf_len)/4095)) * ADC_REF;
 //HAL_Delay(1);
 
 //		operation_flag |= 1; // UART
 //    operation_flag |= 2; // LCD
 
-	}
- */
+//	}
+
 void display_rms_value(float value, float value2)
 {
     char buffer[16]; // Buffer to hold the string representation of the RMS value
@@ -652,7 +661,8 @@ if (htim->Instance == TIM2)
 
 if (htim->Instance == TIM3)
 {
-		  display_rms_value(avg_value, rms_value);
+//		  	skaiciavimai();
+			display_rms_value(avg_value, rms_value);
 //	 		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_9);
 }
 
