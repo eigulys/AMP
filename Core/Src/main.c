@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -54,27 +55,38 @@ DMA_HandleTypeDef hdma_adc1;
 
 I2C_HandleTypeDef hi2c1;
 
-TIM_HandleTypeDef htim2;
-TIM_HandleTypeDef htim3;
-
 UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart2_tx;
 
+/* Definitions for defaultTask */
+osThreadId_t defaultTaskHandle;
+const osThreadAttr_t defaultTask_attributes = {
+  .name = "defaultTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for Task03 */
+osThreadId_t Task03Handle;
+const osThreadAttr_t Task03_attributes = {
+  .name = "Task03",
+  .stack_size = 256 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+/* Definitions for Task04 */
+osThreadId_t Task04Handle;
+const osThreadAttr_t Task04_attributes = {
+  .name = "Task04",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 /* USER CODE BEGIN PV */
 
 uint16_t adc_buf[ADC_buf_len];
 float rms_value;
 uint32_t sum_squares = 0;
-float rms_current = 0.0f;
-//uint32_t max_value = 0;
-//uint16_t max_values_buffer[MAX_VALUES_BUFFER_SIZE];
-float avg_value = 0;
+float avg_value;
+float max_value;
 double suntas = 0.44; // resistance in ohms
-
-volatile uint32_t sum_of_squares = 0;
-volatile uint16_t max_value = 0;
-
-//volatile uint8_t operation_flag = 0;
 char msg[16];
 /* USER CODE END PV */
 
@@ -85,8 +97,10 @@ static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_I2C1_Init(void);
-static void MX_TIM2_Init(void);
-static void MX_TIM3_Init(void);
+void StartDefaultTask(void *argument);
+void StartTask03(void *argument);
+void StartTask04(void *argument);
+
 /* USER CODE BEGIN PFP */
 
 //void display_rms_value(float value);
@@ -95,97 +109,30 @@ static void MX_TIM3_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-///*
-//void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
-//{
-//	HAL_UART_Transmit_IT (&huart2, adc_buf,sizeof(adc_buf));
-//}
-//*/
-/*
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+void display_rms_value(float value, float value2)
 {
-
-    if (htim->Instance == TIM2)
-    {
-
-        HAL_UART_Transmit(&huart2, (uint8_t*)adc_buf, sizeof(adc_buf), HAL_MAX_DELAY);
-    }
-    else if (htim->Instance == TIM3) // Update LCD when TIM3 period elapses
-    {
-        display_rms_value(rms_value);
-    }
-}
-*/
-/*
-void display_rms_value(float value)
-{
-    char buffer[16]; // Buffer to hold the string representation of the RMS value
+    char buffer[32]; // Buffer to hold the string representation of the RMS value
+    char buffer_2[32];
 
     // Convert the float value to a string with two decimal places
-    snprintf(buffer, sizeof(buffer), "RMS: %d mV", (int)value);
+    snprintf(buffer, sizeof(buffer), "RMS: %.1f mV", value);
+	  snprintf(buffer_2, sizeof(buffer_2), "max: %.1f mA", value2);
 
-    //lcd_init();           // Clear the LCD screen
-    lcd_send_cmd (0x80);     // Set cursor to the beginning of the first line
+    lcd_clear();           // Clear the LCD screen
+    lcd_put_cur(0,0);     // Set cursor to the beginning of the first line
     lcd_send_string(buffer); // Display the RMS value on the LCD
-
-
+    lcd_put_cur(1,0);     // Set cursor to the beginning of the first line
+    lcd_send_string(buffer_2);
 }
 
-*/
-///*
-
-
-//*/
-/*
-void UART_Transmit_ADC_Buffer(uint16_t* buffer, uint16_t size)
+int _write(int file, char *ptr, int len)
 {
-    // Initialize UART transmission buffer
-    char uart_buffer[10]; // Buffer to store formatted ADC values
+ /* Implement your write code here, this is used by puts and printf for example */
 
-    // Iterate through the ADC buffer and send each value via UART
-    for (int i = 0; i < size; i++)
-    {
-        // Format the ADC value as a string
-        snprintf(uart_buffer, sizeof(uart_buffer), "%hu\r\n", buffer[i]);
-
-        // Transmit the formatted ADC value via UART
-        HAL_UART_Transmit(&huart2, (uint8_t*)uart_buffer, strlen(uart_buffer), HAL_MAX_DELAY);
-    }
+for(int i=0 ; i<len ; i++)
+ ITM_SendChar((*ptr++));
+return len;
 }
-
-*/
-/*
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
-{
-				sprintf(msg, "%hu\r\n", *adc_buf);
-				HAL_UART_Transmit_IT(&huart2, (uint8_t *)msg, strlen(msg));
-//					HAL_UART_Transmit_IT(&huart2, (uint8_t *)adc_buf, sizeof(adc_buf));
-}
-*/
-/*
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
-{
-
-	    max_value = 0;
-    for (int i = 0; i < ADC_buf_len; i++) {
-        if (adc_buf[i] > max_value) {
-            max_value = adc_buf[i];
-        }
-    }
-    // Calculate sum of squares and find max value
-    for (int i = 0; i < ADC_buf_len; i++) {
-        sum_of_squares += adc_buf[i] * adc_buf[i];
-
-    }
-
-    // Calculate RMS value
-    rms_value = (sqrtf((float)sum_of_squares / ADC_buf_len))*3.3/4096;
-		//rms_value = max_value;
-		rms_current = max_value*3.3/4096;
-
-		HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-}
-*/
 /* USER CODE END 0 */
 
 /**
@@ -230,13 +177,11 @@ int main(void)
   MX_ADC1_Init();
   MX_USART2_UART_Init();
   MX_I2C1_Init();
-  MX_TIM2_Init();
-  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 	lcd_init ();
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t*)adc_buf, ADC_buf_len);
-  HAL_TIM_Base_Start_IT(&htim2); // Start TIM2
-  HAL_TIM_Base_Start_IT(&htim3); // Start TIM3
+//  HAL_TIM_Base_Start_IT(&htim2); // Start TIM2
+//  HAL_TIM_Base_Start_IT(&htim3); // Start TIM3
 
 
 //	  lcd_send_string("a tu veiki?");
@@ -245,17 +190,59 @@ int main(void)
 
   /* USER CODE END 2 */
 
+  /* Init scheduler */
+  osKernelInitialize();
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* creation of defaultTask */
+  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+
+  /* creation of Task03 */
+  Task03Handle = osThreadNew(StartTask03, NULL, &Task03_attributes);
+
+  /* creation of Task04 */
+  Task04Handle = osThreadNew(StartTask04, NULL, &Task04_attributes);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* USER CODE BEGIN RTOS_EVENTS */
+  /* add events, ... */
+  /* USER CODE END RTOS_EVENTS */
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
+
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	    max_value = 0;
-  for (int i = 0; i < ADC_buf_len; i++) {
-      if (adc_buf[i] > max_value) {
-          max_value = adc_buf[i];
-      }
-  }
-  	  rms_value = max_value/4096;
+//	    max_value = 0;
+//  for (int i = 0; i < ADC_buf_len; i++) {
+//      if (adc_buf[i] > max_value) {
+//          max_value = adc_buf[i];
+//      }
+//  }
+//  	  rms_value = max_value/4096;
 //		avg_value = 0;
 //  for (int i = 0; i < ADC_buf_len; i++)
 //  {
@@ -410,98 +397,6 @@ static void MX_I2C1_Init(void)
 }
 
 /**
-  * @brief TIM2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM2_Init(void)
-{
-
-  /* USER CODE BEGIN TIM2_Init 0 */
-
-  /* USER CODE END TIM2_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM2_Init 1 */
-
-  /* USER CODE END TIM2_Init 1 */
-  htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 7199;
-  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 499;
-  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM2_Init 2 */
-
-
-
-  /* USER CODE END TIM2_Init 2 */
-
-}
-
-/**
-  * @brief TIM3 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM3_Init(void)
-{
-
-  /* USER CODE BEGIN TIM3_Init 0 */
-
-  /* USER CODE END TIM3_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM3_Init 1 */
-
-  /* USER CODE END TIM3_Init 1 */
-  htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 7199;
-  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 9999;
-  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM3_Init 2 */
-
-  /* USER CODE END TIM3_Init 2 */
-
-}
-
-/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -545,10 +440,10 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
   /* DMA1_Channel7_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel7_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Channel7_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel7_IRQn);
 
 }
@@ -633,40 +528,40 @@ static void MX_GPIO_Init(void)
 
 //	}
 
-void display_rms_value(float value, float value2)
-{
-    char buffer[16]; // Buffer to hold the string representation of the RMS value
-    char buffer_2[16];
+//void display_rms_value(float value, float value2)
+//{
+//    char buffer[16]; // Buffer to hold the string representation of the RMS value
+//    char buffer_2[16];
+//
+//    // Convert the float value to a string with two decimal places
+//    snprintf(buffer, sizeof(buffer), "RMS: %d mV", (int)value);
+//	  snprintf(buffer_2, sizeof(buffer_2), "max: %d mA", (int)value2);
+//
+//    lcd_clear();           // Clear the LCD screen
+//    lcd_put_cur(0,0);     // Set cursor to the beginning of the first line
+//    lcd_send_string(buffer); // Display the RMS value on the LCD
+//    lcd_put_cur(1,0);     // Set cursor to the beginning of the first line
+//    lcd_send_string(buffer_2);
+//}
 
-    // Convert the float value to a string with two decimal places
-    snprintf(buffer, sizeof(buffer), "RMS: %d mV", (int)value);
-	  snprintf(buffer_2, sizeof(buffer_2), "max: %d mA", (int)value2);
-
-    lcd_clear();           // Clear the LCD screen
-    lcd_put_cur(0,0);     // Set cursor to the beginning of the first line
-    lcd_send_string(buffer); // Display the RMS value on the LCD
-    lcd_put_cur(1,0);     // Set cursor to the beginning of the first line
-    lcd_send_string(buffer_2);
-}
-
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-if (htim->Instance == TIM2)
-	{
-				sprintf(msg, "%hu\r\n", *adc_buf);
-				HAL_UART_Transmit_IT(&huart2, (uint8_t *)msg, strlen(msg));
-//				HAL_UART_Transmit_IT(&huart2, (uint8_t *)adc_buf, sizeof(adc_buf));
-        HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_8);
-	}
-
-if (htim->Instance == TIM3)
-{
-//		  	skaiciavimai();
-			display_rms_value(avg_value, rms_value);
-//	 		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_9);
-}
-
-}
+//void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+//{
+//if (htim->Instance == TIM2)
+//	{
+//				sprintf(msg, "%hu\r\n", *adc_buf);
+//				HAL_UART_Transmit_IT(&huart2, (uint8_t *)msg, strlen(msg));
+////				HAL_UART_Transmit_IT(&huart2, (uint8_t *)adc_buf, sizeof(adc_buf));
+//        HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_8);
+//	}
+//
+//if (htim->Instance == TIM3)
+//{
+////		  	skaiciavimai();
+//			display_rms_value(avg_value, rms_value);
+////	 		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_9);
+//}
+//
+//}
 
 
 /*
@@ -705,6 +600,123 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* Hadc) {
 */
 
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_StartDefaultTask */
+/**
+  * @brief  Function implementing the defaultTask thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_StartDefaultTask */
+void StartDefaultTask(void *argument)
+{
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  for(;;)
+  {
+    osDelay(1);
+  }
+  /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_StartTask03 */
+/**
+* @brief Function implementing the Task03 thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTask03 */
+void StartTask03(void *argument)
+{
+  /* USER CODE BEGIN StartTask03 */
+	uint32_t tcount = 0;
+	uint16_t max_buf[20];
+	uint32_t max_buf_index = 0;
+	uint32_t sum = 0;
+  /* Infinite loop */
+  for(;;)
+  {
+	  	  tcount++;
+	  	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+	  	  max_value = 0;
+	  	  for (int i = 0; i < ADC_buf_len; i++) {
+	  	      if (adc_buf[i] > max_value) {
+	  	          max_value = adc_buf[i];
+	  	      }
+	  	  }
+	  	  max_buf[max_buf_index++] = max_value;
+
+	  	  if(tcount == 10)
+	  	  {
+
+	      for(int i = 0; i < max_buf_index; i++) {
+	          sum += max_buf[i];
+	      }
+	      avg_value = sum / max_buf_index;
+
+	      max_buf_index = 0;
+	      sum = 0;
+	      tcount = 0;
+
+	      if(avg_value > 0) {
+	        rms_value = avg_value / 4096 * ADC_REF;
+	  	  	int rms_value_int = (int)rms_value;
+	  	  	printf("duomenys: %d\n", rms_value_int);
+	  	  	display_rms_value(avg_value, rms_value);
+	      	  	  	  	  	  }
+	      else {
+		  	  	printf("--- \n");
+		  	  	display_rms_value(0, 0);
+	      	  	}
+
+  	  	  }
+    osDelay(200);
+  }
+  /* USER CODE END StartTask03 */
+}
+
+/* USER CODE BEGIN Header_StartTask04 */
+/**
+* @brief Function implementing the Task04 thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTask04 */
+void StartTask04(void *argument)
+{
+  /* USER CODE BEGIN StartTask04 */
+  /* Infinite loop */
+  for(;;)
+  {
+		sprintf(msg, "%hu\r\n", *adc_buf);
+		HAL_UART_Transmit_IT(&huart2, (uint8_t *)msg, strlen(msg));
+//				HAL_UART_Transmit_IT(&huart2, (uint8_t *)adc_buf, sizeof(adc_buf));
+		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_8);
+    osDelay(500);
+  }
+  /* USER CODE END StartTask04 */
+}
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM4 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM4) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
