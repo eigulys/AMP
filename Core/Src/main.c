@@ -39,6 +39,7 @@
 #define ADC_buf_len 1000
 //#define ADC_buf_len 293
 #define ADC_REF 2600
+#define buff2 20
 //#define MAX_VALUES_BUFFER_SIZE 3
 
 
@@ -78,15 +79,30 @@ const osThreadAttr_t Task04_attributes = {
   .stack_size = 128 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
+/* Definitions for PC_data */
+osMessageQueueId_t PC_dataHandle;
+const osMessageQueueAttr_t PC_data_attributes = {
+  .name = "PC_data"
+};
 /* USER CODE BEGIN PV */
 
 uint16_t adc_buf[ADC_buf_len];
 float rms_value;
+float rms_value2;
 uint32_t sum_squares = 0;
 float avg_value;
 float max_value;
 double suntas = 0.44; // resistance in ohms
 char msg[16];
+uint32_t tcount = 0;
+
+uint32_t max_buf[buff2];
+uint32_t max_buf_index = 0;
+uint32_t sum = 0;
+uint32_t ncount = 0;
+uint32_t Voffset = 1099;
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -124,14 +140,18 @@ void display_rms_value(float value, float value2)
     lcd_send_string(buffer_2);
 }
 
+
+
+
+
 int _write(int file, char *ptr, int len)
 {
- /* Implement your write code here, this is used by puts and printf for example */
-
+/* Implement your write code here, this is used by puts and printf for example */
 for(int i=0 ; i<len ; i++)
  ITM_SendChar((*ptr++));
 return len;
 }
+
 /* USER CODE END 0 */
 
 /**
@@ -203,6 +223,10 @@ int main(void)
   /* USER CODE BEGIN RTOS_TIMERS */
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
+
+  /* Create the queue(s) */
+  /* creation of PC_data */
+  PC_dataHandle = osMessageQueueNew (1, sizeof(uint32_t), &PC_data_attributes);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
@@ -625,49 +649,92 @@ void StartDefaultTask(void *argument)
 void StartTask03(void *argument)
 {
   /* USER CODE BEGIN StartTask03 */
-	uint32_t tcount = 0;
-	uint16_t max_buf[20];
-	uint32_t max_buf_index = 0;
-	uint32_t sum = 0;
-	uint16_t V_value;
+
+
+//	uint8_t impulsas = 0;
+//	uint8_t ar_buvo_pulsas = 0;
   /* Infinite loop */
   for(;;)
   {
 	  	  tcount++;
-	  	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+//	  	  ncount++;
+//	  	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
 	  	  max_value = 0;
 	  	  for (int i = 0; i < ADC_buf_len; i++) {
-	  	      if (adc_buf[i] > max_value) {
-	  	          max_value = adc_buf[i];
-	  	      }
-	  	  }
-	  	  max_buf[max_buf_index++] = max_value - 1099;
-//	  	  V_value = max_value - 1096;
-	  	  if(tcount == 5)
-	  	  {
+	  	      if (adc_buf[i] > Voffset) {
+	  	    	  	   if (adc_buf[i] > max_value) {
+						max_value = adc_buf[i];  }
+	  	    	  	   else {
+	  	    	  if (max_buf_index < buff2) {
+	  		  			max_buf[max_buf_index++] = max_value; }
+//	  	    	  else {
+//	  	    		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_SET);}
+	  	    	  }}
 
+
+	  		}
+//	  		if (adc_buf[i] < Voffset + 1) {
+//	  			max_buf[max_buf_index++] = max_value - Voffset;
+//	  			avg_value = 1;
+//		        rms_value = max_value / 827 * 2140;
+//		  	  	int rms_value_int = (int)rms_value;
+	//	  	  	printf("duomenys: %d\n", rms_value_int);
+//		  	  	display_rms_value(avg_value, rms_value);
+//	  			impulsas = 0;
+//	  	  }
+
+//	  	  V_value = max_value - 1096;
+//	  	  if (ncount == 4) {
+//	  		osMessageQueuePut(PC_dataHandle, &max_value, 0, osWaitForever);
+//	  		ncount = 0;
+//	  	  }
+	  	  if (tcount == 10)
+	  	  { ncount = 0;
+//	  		  if (ncount == 5) {
+//	  			display_rms_value(0, 0);
+//	  			ncount = 0;
+//	  			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+//	  				  		  }
+//
+	  	if (max_buf_index == 0) {
+	  		display_rms_value(0, 0);
+	  		tcount = 0;
+	  	}
+	  	  else {
+	  		  ncount = 0;
 	      for(int i = 0; i < max_buf_index; i++) {
-	          sum += max_buf[i];
+	          if (max_buf[i] !=0) {
+			  sum += max_buf[i];
+			  ncount++; }
 	      }
-	      avg_value = sum / max_buf_index;
+	      if (ncount > 0) {
+	      avg_value = sum / ncount; }
+	      else {
+	    	  display_rms_value(0, 0);
+	      }
 
 	      max_buf_index = 0;
 	      sum = 0;
 	      tcount = 0;
+	      ncount = 0;
+
 
 	      if(avg_value > 0) {
-	        rms_value = avg_value / 827 * 2140;
-	  	  	int rms_value_int = (int)rms_value;
+	        rms_value = (max_value - Voffset) / 2000 * 2700;
+	        rms_value2 = max_value / 2000 * 2700;
+//	  	  	int rms_value_int = (int)rms_value;
 //	  	  	printf("duomenys: %d\n", rms_value_int);
-	  	  	display_rms_value(avg_value, rms_value);
+	  	  	display_rms_value(rms_value2, rms_value);
 	      	  	  	  	  	  }
 	      else {
 //		  	  	printf("--- \n");
 		  	  	display_rms_value(0, 0);
 	      	  	}
 
-  	  	  }
-    osDelay(200);
+	  	  }
+//	  		ncount = 0;
+	  	  }
+    osDelay(50);
   }
   /* USER CODE END StartTask03 */
 }
@@ -682,16 +749,19 @@ void StartTask03(void *argument)
 void StartTask04(void *argument)
 {
   /* USER CODE BEGIN StartTask04 */
+//	uint32_t gauta = 0;
   /* Infinite loop */
   for(;;)
   {
+//	  	osMessageQueueGet(PC_dataHandle, &gauta, NULL, osWaitForever);
 		sprintf(msg, "%hu\r\n", *adc_buf);
+//		sprintf(msg, "%hu\r\n", gauta);
 
-		if (HAL_UART_Transmit_IT(&huart2, (uint8_t *)msg, strlen(msg)) ==HAL_OK) {
+		HAL_UART_Transmit_IT(&huart2, (uint8_t *)msg, strlen(msg));
 //				HAL_UART_Transmit_IT(&huart2, (uint8_t *)adc_buf, sizeof(adc_buf));
 		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_8);
-		}
-    osDelay(500);
+
+    osDelay(200);
   }
   /* USER CODE END StartTask04 */
 }
