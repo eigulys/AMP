@@ -38,7 +38,7 @@
 
 #define ADC_buf_len 1000
 //#define ADC_buf_len 293
-#define ADC_REF 3300
+#define ADC_REF 2600
 //#define MAX_VALUES_BUFFER_SIZE 3
 
 
@@ -56,7 +56,6 @@ DMA_HandleTypeDef hdma_adc1;
 I2C_HandleTypeDef hi2c1;
 
 UART_HandleTypeDef huart2;
-DMA_HandleTypeDef hdma_usart2_tx;
 
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -442,9 +441,6 @@ static void MX_DMA_Init(void)
   /* DMA1_Channel1_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-  /* DMA1_Channel7_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel7_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel7_IRQn);
 
 }
 
@@ -633,6 +629,7 @@ void StartTask03(void *argument)
 	uint16_t max_buf[20];
 	uint32_t max_buf_index = 0;
 	uint32_t sum = 0;
+	uint16_t V_value;
   /* Infinite loop */
   for(;;)
   {
@@ -644,9 +641,9 @@ void StartTask03(void *argument)
 	  	          max_value = adc_buf[i];
 	  	      }
 	  	  }
-	  	  max_buf[max_buf_index++] = max_value;
-
-	  	  if(tcount == 10)
+	  	  max_buf[max_buf_index++] = max_value - 1099;
+//	  	  V_value = max_value - 1096;
+	  	  if(tcount == 5)
 	  	  {
 
 	      for(int i = 0; i < max_buf_index; i++) {
@@ -659,13 +656,13 @@ void StartTask03(void *argument)
 	      tcount = 0;
 
 	      if(avg_value > 0) {
-	        rms_value = avg_value / 4096 * ADC_REF;
+	        rms_value = avg_value / 827 * 2140;
 	  	  	int rms_value_int = (int)rms_value;
-	  	  	printf("duomenys: %d\n", rms_value_int);
+//	  	  	printf("duomenys: %d\n", rms_value_int);
 	  	  	display_rms_value(avg_value, rms_value);
 	      	  	  	  	  	  }
 	      else {
-		  	  	printf("--- \n");
+//		  	  	printf("--- \n");
 		  	  	display_rms_value(0, 0);
 	      	  	}
 
@@ -689,9 +686,11 @@ void StartTask04(void *argument)
   for(;;)
   {
 		sprintf(msg, "%hu\r\n", *adc_buf);
-		HAL_UART_Transmit_IT(&huart2, (uint8_t *)msg, strlen(msg));
+
+		if (HAL_UART_Transmit_IT(&huart2, (uint8_t *)msg, strlen(msg)) ==HAL_OK) {
 //				HAL_UART_Transmit_IT(&huart2, (uint8_t *)adc_buf, sizeof(adc_buf));
 		HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_8);
+		}
     osDelay(500);
   }
   /* USER CODE END StartTask04 */
