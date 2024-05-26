@@ -37,7 +37,7 @@
 /* USER CODE BEGIN PD */
 
 #define ADC_buf_len 1000
-//#define ADC_buf_len 293
+#define ldata 101
 #define ADC_REF 2600
 #define buff2 20
 //#define MAX_VALUES_BUFFER_SIZE 3
@@ -102,6 +102,14 @@ uint32_t sum = 0;
 uint32_t ncount = 0;
 uint32_t Voffset = 1099;
 
+int lentele[] = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100,
+		105, 110, 115, 120, 125, 130, 135, 140, 145, 150, 155, 160, 165, 170, 175, 180, 185, 190, 195, 200,
+		205, 210, 215, 220, 225, 230, 235, 240, 245, 250, 255, 260, 265, 270, 275, 280, 285, 290, 295, 300,
+		305, 310, 315, 320, 325, 330, 335, 340, 345, 350, 355, 360, 365, 370, 375, 380, 385, 390, 395, 400,
+		405, 410, 415, 420, 425, 430, 435, 440, 445, 450, 455, 460, 465, 470, 475, 480, 485, 490, 495, 500};
+
+
+
 
 /* USER CODE END PV */
 
@@ -130,8 +138,8 @@ void display_rms_value(float value, float value2)
     char buffer_2[32];
 
     // Convert the float value to a string with two decimal places
-    snprintf(buffer, sizeof(buffer), "RMS: %.1f mV", value);
-	  snprintf(buffer_2, sizeof(buffer_2), "max: %.1f mA", value2);
+    snprintf(buffer, sizeof(buffer), "CALC: %.1f mV", value);
+	  snprintf(buffer_2, sizeof(buffer_2), "MAX: %.f", value2);
 
     lcd_clear();           // Clear the LCD screen
     lcd_put_cur(0,0);     // Set cursor to the beginning of the first line
@@ -151,6 +159,21 @@ for(int i=0 ; i<len ; i++)
  ITM_SendChar((*ptr++));
 return len;
 }
+
+float correct_rms_value(float rms_value) {
+    int index = (rms_value - Voffset) / 10;  // Map rms_value to LUT index
+
+    // Ensure the index is within the bounds of the lookup table
+    if (index < 0) {
+        index = 0;
+    } else if (index >= ldata) {
+        index = ldata - 1;
+    }
+
+    return rms_value * lentele[index];
+}
+
+
 
 /* USER CODE END 0 */
 
@@ -720,11 +743,11 @@ void StartTask03(void *argument)
 
 
 	      if(avg_value > 0) {
-	        rms_value = (max_value - Voffset) / 2000 * 2700;
-	        rms_value2 = max_value / 2000 * 2700;
+//	        rms_value = sqrt(((max_value - Voffset) / 1000) * ((max_value - Voffset) / 1000)) * 2.41 / 0.44;
+	        rms_value2 = max_value / 1000 * 2.41;
 //	  	  	int rms_value_int = (int)rms_value;
 //	  	  	printf("duomenys: %d\n", rms_value_int);
-	  	  	display_rms_value(rms_value2, rms_value);
+	  	  	display_rms_value(rms_value2, max_value);
 	      	  	  	  	  	  }
 	      else {
 //		  	  	printf("--- \n");
