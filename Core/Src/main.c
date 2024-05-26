@@ -38,7 +38,9 @@
 
 #define ADC_buf_len 1000
 #define ldata 101
-#define ADC_REF 2600
+#define ADC_REF 2.41
+#define SUNTAS 0.72
+#define AMPLITUDE 100
 #define buff2 20
 //#define MAX_VALUES_BUFFER_SIZE 3
 
@@ -92,7 +94,7 @@ float rms_value2;
 uint32_t sum_squares = 0;
 float avg_value;
 float max_value;
-double suntas = 0.44; // resistance in ohms
+// double suntas = 0.44;
 char msg[16];
 uint32_t tcount = 0;
 
@@ -100,7 +102,7 @@ uint32_t max_buf[buff2];
 uint32_t max_buf_index = 0;
 uint32_t sum = 0;
 uint32_t ncount = 0;
-uint32_t Voffset = 1099;
+uint32_t Voffset = 1180;
 
 int lentele[] = {0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100,
 		105, 110, 115, 120, 125, 130, 135, 140, 145, 150, 155, 160, 165, 170, 175, 180, 185, 190, 195, 200,
@@ -138,8 +140,8 @@ void display_rms_value(float value, float value2)
     char buffer_2[32];
 
     // Convert the float value to a string with two decimal places
-    snprintf(buffer, sizeof(buffer), "CALC: %.1f mV", value);
-	  snprintf(buffer_2, sizeof(buffer_2), "MAX: %.f", value2);
+    snprintf(buffer, sizeof(buffer), "PEAK: %.f mA", value);
+	  snprintf(buffer_2, sizeof(buffer_2), "RMS: %.f mA", value2);
 
     lcd_clear();           // Clear the LCD screen
     lcd_put_cur(0,0);     // Set cursor to the beginning of the first line
@@ -743,11 +745,15 @@ void StartTask03(void *argument)
 
 
 	      if(avg_value > 0) {
-//	        rms_value = sqrt(((max_value - Voffset) / 1000) * ((max_value - Voffset) / 1000)) * 2.41 / 0.44;
-	        rms_value2 = max_value / 1000 * 2.41;
-//	  	  	int rms_value_int = (int)rms_value;
-//	  	  	printf("duomenys: %d\n", rms_value_int);
-	  	  	display_rms_value(rms_value2, max_value);
+//	        rms_value = ((max_value - Voffset) / AMPLITUDE *  ADC_REF / SUNTAS) * 0.7071;
+	    	  rms_value = (0.549 * max_value) - 649.31;
+	    	  rms_value2 = rms_value / 0.7071;
+//	    	  rms_value2 = (max_value - 1190) * 216 / 393 + 4;
+	    	  if (rms_value > 0) {
+	  	  	display_rms_value(rms_value2, rms_value); }
+	    	  else{
+	    		  		  	  	display_rms_value(0, 0);
+	    		  	      	  	}
 	      	  	  	  	  	  }
 	      else {
 //		  	  	printf("--- \n");
